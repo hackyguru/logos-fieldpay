@@ -1,0 +1,39 @@
+name: Publish release from a build
+
+# Turns the .lgx artifacts of an existing "Build modules" run into a GitHub
+# release, without rebuilding.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "ID of the Build modules run whose artifacts to publish"
+        required: true
+      tag:
+        description: "Release tag, e.g. v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: _artifacts
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${{ inputs.run_id }}" --jq .head_sha)
+          ls -la _artifacts
+          gh release create "${{ inputs.tag }}" _artifacts/*.lgx \
+            --repo "${GITHUB_REPOSITORY}" --target "$sha" \
+            --title "Field Pay ${{ inputs.tag }}" --generate-notes
