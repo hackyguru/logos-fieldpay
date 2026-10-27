@@ -1,0 +1,12 @@
+[package]
+name = "token_build_local"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Builds the guest with the local risc0 toolchain (`rzup install`) instead of
+# Docker. Same compiler and flags, but not byte-for-byte reproducible.
+[dependencies]
+risc0-build = "=3.0.5"
+
+[workspace]

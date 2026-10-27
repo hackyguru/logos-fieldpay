@@ -1,0 +1,6 @@
+result*
+store-core/tests/harness
+store-core/tests/.gen/
+token-program/target/
+token-program/build-local/target/
+*.log

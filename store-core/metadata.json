@@ -1,0 +1,31 @@
+{
+  "name": "fieldstore_core",
+  "version": "0.1.0",
+  "type": "core",
+  "interface": "universal",
+  "category": "wallet",
+  "description": "Field Store core — a fixed-supply LEZ token for a pop-up shop: resident wallet with public and private payments, a till feed, and organizer issuance",
+  "codegen": {
+    "impl_header": "src/fieldstore_impl.h",
+    "impl_class": "FieldStoreImpl"
+  },
+  "main": "fieldstore_core_plugin",
+  "dependencies": [],
+  "nix": {
+    "packages": {
+      "build": [],
+      "runtime": ["nlohmann_json"]
+    },
+    "external_libraries": [
+      {
+        "name": "wallet_ffi"
+      }
+    ],
+    "cmake": {
+      "find_packages": [],
+      "extra_sources": [],
+      "extra_include_dirs": [],
+      "extra_link_libraries": []
+    }
+  }
+}

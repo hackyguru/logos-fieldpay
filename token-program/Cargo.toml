@@ -1,0 +1,29 @@
+[package]
+name = "token"
+version = "0.1.0"
+edition = "2024"
+
+# The LEZ Token program, vendored from logos-execution-zone rev 411adc8
+# (lez/programs/token). LEZ v0.3.1 dropped it from the built-in programs, so
+# Field Store deploys its own copy. A risc0 guest: build with build.sh.
+[lib]
+name = "token_program"
+path = "src/lib.rs"
+
+[[bin]]
+name = "token"
+path = "src/main.rs"
+
+[dependencies]
+borsh = { version = "1.5.7", features = ["derive"] }
+lee_core = { git = "https://github.com/logos-blockchain/logos-execution-zone", tag = "v0.3.1" }
+token_core = { path = "core" }
+risc0-zkvm = { version = "=3.0.5", default-features = false, features = ["std"] }
+
+[workspace]
+members = ["."]
+exclude = ["build-local"]
+
+[profile.release]
+lto = true
+opt-level = 3

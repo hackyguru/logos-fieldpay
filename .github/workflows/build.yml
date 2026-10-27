@@ -1,0 +1,105 @@
+name: Build modules
+
+# Builds the portable .lgx for fieldstore_core and fieldstore on every
+# platform Basecamp ships for. Pushing a `v*` tag also attaches them to a
+# GitHub release.
+#
+# Windows is not in the matrix: the core links LEZ's wallet_ffi (Rust +
+# risc0), and LEZ v0.3.1 publishes no Windows build of it.
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: darwin-arm64
+            runs-on: macos-latest
+          - variant: linux-amd64
+            runs-on: ubuntu-latest
+          - variant: linux-arm64
+            runs-on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      # Flake inputs that reference the working tree refuse a shallow clone.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      # The first core build compiles the LEZ wallet FFI and its risc0 deps;
+      # the stock Linux runners run out of disk without this.
+      - name: Free disk space
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      # DeterminateSystems rather than cachix/install-nix-action: the latter
+      # trips over the macOS runners' pre-provisioned _nixbld users.
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+        with:
+          extra-conf: |
+            experimental-features = nix-command flakes
+
+      # risc0's Metal kernels need Xcode's Metal toolchain.
+      - name: Ensure Metal Toolchain
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          if /usr/bin/xcrun metal --version >/dev/null 2>&1; then
+            echo "Metal Toolchain present"
+            exit 0
+          fi
+          xcodebuild -downloadComponent MetalToolchain
+          /usr/bin/xcrun metal --version
+
+      - name: Build fieldstore_core
+        run: |
+          set -euo pipefail
+          mkdir -p _artifacts
+          cd store-core
+          out=$(nix build 'path:.#lgx-portable' --print-out-paths --no-link -L)
+          cp "$(find "$out" -maxdepth 2 -name '*.lgx' | head -n1)" \
+             "$GITHUB_WORKSPACE/_artifacts/fieldstore_core-${{ matrix.variant }}.lgx"
+
+      # Build the UI against this checkout's core, not the one pinned in
+      # store-ui/flake.lock, so both artifacts come from the same commit.
+      - name: Build fieldstore (UI)
+        run: |
+          set -euo pipefail
+          cd store-ui
+          out=$(nix build 'path:.#lgx-portable' --print-out-paths --no-link -L \
+                  --override-input fieldstore_core path:../store-core)
+          cp "$(find "$out" -maxdepth 2 -name '*.lgx' | head -n1)" \
+             "$GITHUB_WORKSPACE/_artifacts/fieldstore-${{ matrix.variant }}.lgx"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: lgx-${{ matrix.variant }}
+          path: _artifacts/*.lgx
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: _artifacts
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" _artifacts/*.lgx \
+            --repo "${GITHUB_REPOSITORY}" --title "Field Pay ${GITHUB_REF_NAME}" --generate-notes
